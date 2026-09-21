@@ -17,7 +17,7 @@ Now, we are going to introduce some basic concepts of networks including their d
 
 \subsection{Networks as Graphs}
 We can very well describe a computer network through graphs: each connected device is a \keyword{node}, each connection between nodes is called \keyword{link} and a sequence of links is called a \keyword{path}.
-In a simplified model, \emph{leaves}\footnote{Leaves are nodes that have one link at most.} such that a PC or a printer. Leaves are more commonly called \keyword{end-points}.
+In a simplified model, \emph{leaves}\footnote{Leaves are nodes that have one link at most.} such that a PC or a printer. Leaves are more commonly called \keyword{endpoints} or \keyword{hosts}.
 
 \subsection{Communication}
 In general, a \keyword{communication} has five components:
@@ -42,6 +42,9 @@ A communication medium (or, more in general, a communication pattern) can be:
 We call \keyword{transmission rate} the maximum amount of data that a \emph{node} can trasmit.
 \keyword{Bandwidth} is the maximum amount of data that a \emph{path} can trasmit, while the \keyword{throughput} is the actual amount of data that is being transmitted over a \emph{path}.
 All these three, related metrics are measured in bits (or multiples) over seconds.
+
+The \emph{Round-Trip Time} (\keyword{RTT}) is defined as the total duration measured from the instant a client initiates a network request to the instant the corresponding response or acknowledgment is fully received back at the source \cite{rfc2681}. 
+RTT is extensively used to infer network congestion, define optimal timeout values and more.
 
 \subsection{Topology}
 Every network has a \keyword{topology}, that is the arrangement of the nodes and their connections.
@@ -76,7 +79,7 @@ A mesh topology features nodes interconnected with multiple other nodes, offerin
 \end{center}
 
 \paragraph{Star}
-The star topology connects all leaves (end-points) to a central centralizing node, such as a switch or hub. This design is highly manageable and isolates individual link faults well, but the central node represents a single point of failure.
+The star topology connects all leaves (endpoints) to a central centralizing node, such as a switch or hub. This design is highly manageable and isolates individual link faults well, but the central node represents a single point of failure.
 \begin{center}
 \begin{tikzpicture}[every node/.style={circle, draw, fill=blue!20, minimum size=0.5cm}]
 \node (center) at (0,0) {};

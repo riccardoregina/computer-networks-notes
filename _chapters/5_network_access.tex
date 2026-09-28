@@ -1,0 +1,108 @@
+\chapter{Network Access Layer}
+The Network Access Layer provides communication between two physically connected devices. In the context of the Internet Protocol suite, this layer encompasses the functionalities of two distinct layers from the OSI model:
+\begin{itemize}
+    \item \emph{Layer 2 (Data Link Layer):} Manages the communication between nodes over established physical links.
+    \item \emph{Layer 1 (Physical Layer):} Regulates the mechanical and electrical specifications of the links, dictating how raw bit streams are physically transmitted.
+\end{itemize}
+In modern \emph{de facto} standards, these two layers are heavily intertwined and often treated as a single cohesive unit, given that data link protocols are typically hardcoded into the network interface hardware \cite{kurose2017}.
+
+\section{Switches}
+\keyword{Switches} are specialized network devices operating primarily at the Network Access Layer. They act as the routing entities of local networks. Their core responsibility is to forward \emph{link frames} -- which encapsulate IP datagrams -- based on a forwarding table that maps IP addresses to physical MAC addresses. 
+
+\section{Services}
+The Network Access Layer offers several critical services to the network stack:
+\begin{itemize}
+    \item \emph{Framing}: An IP datagram is encapsulated into a link-layer frame, complete with a specific header and trailer.
+    \item \emph{Link Access}: On shared broadcast mediums, a \emph{Medium Access Control} (\keyword{MAC}) protocol is necessary to regulate access and prevent transmission collisions.
+    \item \emph{Reliable Delivery}: Though optional, some link-layer protocols guarantee that frames are delivered successfully, usually through acknowledgments and retransmissions.
+    \item \emph{Error Detection and Correction}: Physical mediums are susceptible to signal attenuation and external interference, causing bit-flipping. Hardware-level error detection mechanisms are employed to identify and sometimes correct these anomalies.
+\end{itemize}
+
+While adding overhead to lower layers can severely impact stack performance, implementing error detection at the Network Access Layer is highly efficient. Software operations require numerous CPU cycles, whereas dedicated hardware circuits (like ASICs found in network adapters) execute these checks almost instantaneously. Because bit-flipping is a common physical phenomenon, catching it early in hardware prevents the upper software layers from wasting time processing corrupted packets.
+
+\section{Error Detection}
+Error checking cannot absolutely guarantee that a message is flawless, but it significantly raises the probability of identifying corrupted frames.
+
+\paragraph{Parity Bit}
+The simplest form of error detection relies on a single parity bit. The sender appends a bit to the frame such that the total number of \(1\)s in the frame is either always even or always odd (depending on the chosen scheme). The receiver recounts the \(1\)s and compares the computed parity with the received bit. 
+While computationally trivial, this method is naive. Errors in physical links tend to occur in bursts due to the principle of locality; if an even number of bits are flipped simultaneously, the parity bit remains valid, and the error goes undetected \cite{kurose2017}.
+
+\paragraph{Two-Dimensional Parity}
+An extension of the basic parity check involves organizing the message bits into a virtual matrix. Parity bits are computed for every row and every column, culminating in a single overall parity bit. This grid approach not only detects burst errors more effectively but can also pinpoint and correct single-bit errors.
+
+\paragraph{Cyclic Redundancy Check}
+The \emph{Cyclic Redundancy Check} (CRC) is the industry standard for robust error detection. It relies on polynomial division over Galois Field:
+\begin{enumerate}
+    \item The sender and receiver agree on a \keyword{generator} \( G \), a sequence of \( r+1 \) bits where the leftmost bit is \( 1 \).
+    \item The sender left-shifts the data \( D \) by \( r \) bits (equivalent to multiplying by \( 2^r \)) and divides it by \( G \) using modulo-2 arithmetic. The \( r \)-bit remainder is the \keyword{CRC}.
+    \item The sender appends the CRC to the original data, ensuring that the transmitted sequence is perfectly divisible by \( G \).
+    \item The receiver divides the incoming frame by \( G \). If the remainder is \( 0 \), the frame is assumed intact.
+\end{enumerate}
+Standardized generator polynomials can successfully detect any burst error of length \(\leq r\) \cite{kurose2017}.
+
+\section{Collisions}
+On a broadcast link, \keyword{collisions} are a fundamental challenge. When multiple nodes transmit simultaneously, their signals interfere, resulting in a scrambled sequence of bits. As network density increases, the probability of collisions skyrockets, potentially killing network throughput.
+
+\subsection{Multiple Access Protocols}
+To mitigate collisions, \keyword{Multiple Access Protocols} are implemented. A robust protocol strives to be simple, decentralized (avoiding single points of failure), and capable of maximizing channel usage. For \( M \) nodes sharing a link with transmission rate \( R \), the ideal average throughput per node is:
+\[ \text{Throughput} = \frac{R}{M} \]
+
+Protocols generally fall into three categories: channel partitioning, random access, taking-turns.
+
+
+\paragraph{Channel Partitioning} 
+This family of approaches aims to avoiding conflicts by partitioning the channel. Many ways of partioning exist:
+    \begin{itemize}
+        \item \emph{TDMA (Time Division Multiple Access):} The channel is divided into fixed time slots. Each node gets an exclusive slot to transmit an average-sized frame.
+        \item \emph{FDMA (Frequency Division Multiple Access):} The physical bandwidth is divided into distinct frequency bands for each device.
+        \item \emph{CDMA (Code Division Multiple Access):} Nodes are assigned unique mathematical codes to encode their data, allowing simultaneous transmissions that do not logically interfere. However, CDMA scales poorly in dense, simple local networks.
+    \end{itemize}
+
+\paragraph{Random Access} 
+The following approaches aim to avoid collisions without partitioning the channel:
+    \begin{itemize}
+        \item \emph{ALOHA:} Time is divided into slots. Nodes transmit at the start of a slot. If a collision is detected, the node waits a random number of slots before attempting retransmission.
+        \item \emph{CSMA (Carrier Sense Multiple Access):} Nodes listen to the channel before transmitting. If the channel is idle, they transmit; if busy, they defer.
+        \item \emph{CSMA/CD (CSMA with Collision Detection):} An enhancement where nodes continue to monitor the medium \emph{during} transmission. If interference is detected mid-transmission, they immediately abort and send a jam signal to minimize wasted time.
+    \end{itemize}
+
+\paragraph{Taking-Turns}: Protocols like token passing, where nodes take explicit turns.
+
+\section{MAC Addresses and ARP}
+A \keyword{MAC address} is a \( 6 \)-byte (\( 48 \)-bit) physically burned-in address that uniquely identifies a network interface on a local network. Given the \( 2^{48} \) address space, collisions are virtually non-existent. 
+
+MAC addresses are essential because they decouple the logical routing (IP addresses) from the physical medium. Furthermore, hardware interfaces can evaluate the destination MAC address of incoming frames instantly; if the address does not match the host, the frame is dropped immediately, sparing the CPU from processing irrelevant data.
+
+\subsection{Address Resolution Protocol (ARP)}
+Because network applications rely on IP addresses, switches and hosts use the \emph{Address Resolution Protocol} (\keyword{ARP}) to map logical IP addresses to physical MAC addresses \cite{rfc826}.
+Every host has an ARP cache, which is essentially a table of IP-MAC addresses rows.
+
+Let's describe how ARP works. Suppose host A needs to send data to host B on the same local network but only knows B's IP address:
+\begin{enumerate}
+    \item Host A checks its local ARP cache. If no entry exists, A broadcasts an \emph{ARP Request} frame containing B's IP address.
+    \item The switch forwards the broadcast out of all ports. Every device inspects the frame.
+    \item Devices whose IPs do not match silently drop the request. Host B, recognizing its own IP, responds with a direct \keyword{ARP Reply} containing its MAC address to host A.
+    \item Host A caches this mapping for future communication.
+\end{enumerate}
+
+Because ARP is stateless and lacks authentication, a malicious device that wants to become a Man-in-the-Middle can send a forged ARP replies, mapping its own MAC address to the IP of the subnet gateway to intercept traffic, to \emph{poison} the victim's ARP cache.
+
+ARP caches are considered stale after some seconds -- the precise period is implementation-specific. When an ARP cache becomes stale, the host sends an ARP request for each entry.
+Refreshing the ARP caches is crucial since the network could change.
+
+This means that the previously described attacker must continously send forged ARP replies in order to win the \q{tug-of-war} against the refreshing mechanism and keeping control over the network.
+    
+A legitimate, unsolicited variant is \keyword{Gratuitous ARP} (GARP). This is an ARP broadcast where a host announces its IP-to-MAC mapping without being prompted. It is heavily used to update stale switch forwarding tables, announce network topology changes (e.g., failover in high-availability clusters), or detect IP conflicts on a newly joined network.
+Also GARP messages can be used by attackers, but they are less stealth due to their generated traffic.
+
+\section{Ethernet}
+Link-layer protocols are inherently tied to physical hardware. \keyword{Ethernet} (IEEE 802.3) is the dominant standard for wired LANs \cite{ieee8023}. A standard Ethernet frame consists of several key fields:
+\begin{enumerate}
+    \item \emph{Preamble (\( 8 \) bytes):} An alternating pattern of \(1\)s and \(0\)s used to wake up the receiving adapters and synchronize their clocks.
+    \item \emph{Destination Address (\( 6 \) bytes):} The MAC address of the intended receiver.
+    \item \emph{Source Address (\( 6 \) bytes):} The MAC address of the sender.
+    \item \emph{Type (\( 2 \) bytes):} Indicates the upper-layer protocol (e.g., IPv4, IPv6) encapsulated in the payload.
+    \item \emph{Data (\( 46 \) to \( 1500 \) bytes):} The encapsulated payload (usually an IP datagram).
+    \item \emph{CRC (\( 4 \) bytes):} The cyclic redundancy check for error detection.
+\end{enumerate}
+

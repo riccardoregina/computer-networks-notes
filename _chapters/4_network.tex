@@ -221,15 +221,70 @@ The practical utility of ICMP is best illustrated by two network diagnostic util
     \item The \texttt{traceroute} command exploits the IP TTL field and ICMP error messages. It sends packets (often UDP or ICMP Echo Requests) with sequentially increasing TTL values (\(1, 2, 3, \dots\)). As each packet expires at a successive router along the path, that router returns an ICMP \emph{Time Exceeded} message. By collecting these error messages, the source host can map the entire route to the destination \cite{kurose2017}.
 \end{itemize}
 
-
 \section{IPv6}
-To address the imminent exhaustion of IPv4 addresses and to modernize the Internet Protocol, the Internet Engineering Task Force (IETF) standardized \keyword{IPv6} \cite{rfc8200}. The most prominent feature of this new version is its adoption of a \(128\)-bit address space. This exponential increase ensures that the Internet will effectively never run out of unique IP addresses, allowing for a vast proliferation of connected devices.
+To address the imminent exhaustion of IPv4 addresses and to modernize the Internet Protocol, the Internet Engineering Task Force (IETF) standardized \keyword{IPv6} \cite{rfc8200}. The most prominent feature of this new version is its adoption of a \(128\)-bit address space. This ensures that the Internet will effectively never run out of unique IP addresses, allowing for a vast proliferation of connected devices.
 
-Beyond expanding the address space, IPv6 introduces several architectural improvements to streamline packet processing:
+\subsection{IPv6 Datagram}
+As illustrated in Figure~\ref{fig:ipv6_datagram}, beyond its expanded address capacity, IPv6 introduces a streamlined, fixed-size \(40\)-byte base header. 
+This redesign deliberately eliminates several IPv4 fields --- such as fragmentation offsets and the header checksum --- to significantly reduce processing overhead at intermediate routers.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[font=\sffamily]
+        \def\w{10}
+        \def\h{0.8}
+
+        \node[above right, inner sep=2pt, font=\scriptsize] at (0,0) {0};
+        \node[above left, inner sep=2pt, font=\scriptsize] at (0.125*\w,0) {4};
+        \node[above left, inner sep=2pt, font=\scriptsize] at (0.375*\w,0) {12};
+        \node[above right, inner sep=2pt, font=\scriptsize] at (0.5*\w,0) {16};
+        \node[above left, inner sep=2pt, font=\scriptsize] at (0.75*\w,0) {24};
+        \node[above left, inner sep=2pt, font=\scriptsize] at (\w,0) {31};
+
+        \draw[thick] (0, 0) rectangle (0.125*\w, -\h) node[midway, font=\scriptsize] {Version};
+        \draw[thick] (0.125*\w, 0) rectangle (0.375*\w, -\h) node[midway, font=\scriptsize] {Traffic Class};
+        \draw[thick] (0.375*\w, 0) rectangle (\w, -\h) node[midway, font=\scriptsize] {Flow Label};
+
+        \draw[thick] (0, -\h) rectangle (0.5*\w, -2*\h) node[midway, font=\scriptsize] {Payload Length};
+        \draw[thick] (0.5*\w, -\h) rectangle (0.75*\w, -2*\h) node[midway, font=\scriptsize] {Next Header};
+        \draw[thick] (0.75*\w, -\h) rectangle (\w, -2*\h) node[midway, font=\scriptsize] {Hop Limit};
+
+        \draw[thick] (0, -2*\h) rectangle (\w, -6*\h) node[midway, font=\scriptsize] {Source IP Address (128 bits)};
+
+        \draw[thick] (0, -6*\h) rectangle (\w, -10*\h) node[midway, font=\scriptsize] {Destination IP Address (128 bits)};
+    \end{tikzpicture}
+    \caption{Detailed Structure of an IPv6 Datagram Header}
+    \label{fig:ipv6_datagram}
+\end{figure}
+
+The individual fields of the IPv6 header operate as follows:
+
 \begin{itemize}
-    \item \emph{Fixed-size header:} Unlike IPv4, which has a variable-length header due to optional fields, the IPv6 base header has a fixed size of \(40\) bytes. This allows routers to process packets more efficiently without needing to parse the header length.
-    \item \emph{Elimination of the header checksum:} IPv6 completely removes the header checksum field found in IPv4. This decision was made because modern link-layer protocols (such as Ethernet) inherently perform robust error detection via cyclic redundancy checks (CRC), and transport-layer protocols (like TCP and UDP) also implement their own checksums. Removing it at the network layer reduces the processing overhead on routers, as they no longer need to recalculate a checksum at every hop when the TTL (called \emph{Hop Limit} in IPv6) field is decremented.
+    \item \emph{Version} (\(4\) bits): Contains the fixed value of \(6\), which identifies the packet as an IPv6 datagram.
+    \item \emph{Traffic Class} (\(8\) bits): Functionally equivalent to the IPv4 Type of Service (ToS) field. It is used by originating nodes and forwarding routers to identify and distinguish between different classes or priorities of IPv6 packets, facilitating Quality of Service (QoS) \cite{rfc8200}.
+    \item \emph{Flow Label} (\(20\) bits): A novel addition in IPv6, this field allows a source to label sequences of packets (flows) that require special handling by routers, such as non-default QoS or real-time service routing constraints \cite{rfc6437}.
+    \item \emph{Payload Length} (\(16\) bits): Specifies the size of the packet payload in bytes, encompassing any \emph{extension headers} and the upper-layer protocol data. Unlike the IPv4 \emph{Total Length} field, this value does not include the size of the base IPv6 header itself since IPv6 headers have fixed size of \(40\)-byte.
+    \item \emph{Next Header} (\(8\) bits): Replacing the IPv4 \emph{Protocol} field, this dictates the type of header immediately following the base IPv6 header. This modular design natively supports the chaining of \keyword{extension headers}, allowing optional network-layer information to be processed only at the destination node rather than at every hop along the path.
+    \item \emph{Hop Limit} (\(8\) bits): Renames the IPv4 \emph{Time-to-Live} (TTL) field.
+    \item \emph{Source IP Address} (\(128\) bits): The address of the packet's initial sender.
+    \item \emph{Destination IP Address} (\(128\) bits): The address of the packet's intended recipient (which may not be the ultimate destination if a Routing Extension Header is present).
 \end{itemize}
+
+Unlike IPv4, the IPv6 base header completely lacks a checksum field. This architectural decision delegates error detection to the link layer (e.g., Ethernet CRC) and upper-layer transport protocols (e.g., TCP or UDP).
+In IPv4, due to to the TTL field decrementing, each router would recalculate the checksum. This design choice hence guarantees a faster packet forwarding.
+
+The \(16\)-bit \emph{Payload Length} field restricts standard IPv6 payloads to \(65,535\) bytes. However, if an application requires transferring a larger payload in a single packet, IPv6 accommodates this by setting the Payload Length field to \(0\) and utilizing a Hop-by-Hop \keyword{Jumbo Payload} extension header \cite{rfc2675}. This capability enables payloads up to \(4,294,967,295\) bytes in length, heavily optimizing throughput on high-capacity links.
+
+Another crucial difference lies in how packet fragmentation is handled. In IPv4, intermediate routers can fragment packets that exceed the MTU of the outgoing link. 
+Conversely, IPv6 shifts this responsibility entirely to the source node \cite{rfc8200}. If a router receives an IPv6 packet that is too large for the next hop, it discards the packet and returns an ICMPv6 \q{Packet Too Big} message, prompting the source to perform \keyword{Path MTU Discovery} (PMTUD) \cite{rfc8201}.
+Because intermediate routers no longer perform fragmentation, endpoints must correctly implement PMTUD to avoid having packets dropped. 
+
+\begin{note}{}
+    If an endpoint's firewall improperly drops inbound ICMPv6 \q{Packet Too Big} messages, communication across networks with smaller MTUs will silently fail.
+\end{note}
+
+Furthermore, IPv6 completely eliminates the broadcast addressing method used in IPv4, relying entirely on more robust and targeted multicast and anycast mechanisms. 
+It also introduces the \emph{Neighbor Discovery Protocol} (\keyword{NDP}), which implements some of the features implemented by the \emph{Address Resolution Protocol} (ARP) -- we will talk about it in the next chapter -- in the legacy TCP/IP stack and operates securely and efficiently over ICMPv6 \cite{rfc4861}.
 
 \begin{observation}{What about IPv5?}
     Given the leap from IPv4 to IPv6, a common question is what happened to IPv5. The version number \(5\) was historically allocated to the \emph{Internet Stream Protocol} (ST, and its successor ST-II) \cite{rfc1819}. This was an experimental protocol designed in the late 1970s and 1990s to provide connection-oriented, guaranteed-bandwidth streams for real-time voice and video transmission. Because it already used the IP version number \(5\) in its packet headers, the next-generation Internet Protocol was naturally designated as IPv6 to avoid any conflict. ST-II never saw widespread public deployment.

@@ -44,14 +44,11 @@ A communication is said reliable when it satisfies all the following three prope
 The assumption is that the lower levels are unreliable. This is generally true (TCP is an exception).
 
 \section{Domain Name System}
-People prefer to connect to online resources using hostnames, while for machines IP addresses are more convenient. The \keyword{Domain Name System} (DNS) is a translation protocol that allows to find an IP address given a hostname. 
-What the DNS does is the Internet for most people.
+People prefer to connect to online resources using human-readable hostnames, while for machines, IP addresses are strictly required for routing. The \keyword{Domain Name System} (DNS) is a distributed, hierarchical directory service that translates hostnames into IP addresses \cite{rfc1034}. Functionally, the DNS underpins almost all user-facing Internet services.
 
-A DNS system is implemented with a client-server architecture: each end-point has a DNS client that queries the DNS server with the hostname.
-The DNS server perform a look up and find the associated IP. This look-up table may be dynamic: querying for the same hostname at different times may yield different IP addresses.
+The DNS operates on a client-server architecture. A DNS client (often a stub resolver\footnote{A DNS stub resolver is a minimal, local component within an operating system or application that handles DNS name resolution requests.} on an endpoint) queries a DNS server to resolve a hostname. The lookup process is dynamic; querying the same hostname at different times or from different geographical locations may yield different IP addresses, facilitating load balancing and Content Delivery Network (CDN) routing.
 
-Since there's a bunch of hostnames and IP addresses in the world, a single, big look-up table would be really slow and would be a single point of failure for the entire Internet.
-In fact, the DNS server system was designed with a hierarchical structure, as shown in Figure~\ref{fig:dns_tree}.
+Given the vast number of interconnected hosts globally, a centralized lookup table would suffer from severe latency and represent a single point of failure. Instead, the DNS infrastructure is designed with a highly scalable, hierarchical structure, as shown in Figure~\ref{fig:dns_tree}.
 
 \begin{figure}[htbp]
     \centering
@@ -73,18 +70,159 @@ In fact, the DNS server system was designed with a hierarchical structure, as sh
     \label{fig:dns_tree}
 \end{figure}
 
-Here’s what happens:
+To resolve a domain name such as \emph{gmail.com}, a recursive resolution process typically unfolds as follows:
 \begin{enumerate}
-    \item You request gmail.com.
-    \item The root DNS server tells the user's DNS to contact a top-level DNS server for .com.
-    \item The top-level DNS server tells the user's DNS to contact an authoritative DNS server for Google.
-    \item The authoritative DNS server tells the user's DNS the IP address of the server.
+    \item The user's device sends a query to a designated \keyword{DNS resolver} (often provided by the ISP or a public service).
+    \item The resolver queries a \emph{Root DNS server}, which responds with the address of the Top-Level Domain (TLD) server responsible for the \emph{.com} namespace.
+    \item The resolver then queries the TLD server, which provides a referral to the \emph{Authoritative DNS server} explicitly managing the \emph{google.com} domain.
+    \item Finally, the resolver queries the authoritative server, which returns the specific IP address mapped to the requested hostname.
 \end{enumerate}
 
-If the domain resolving required all these steps, it would be slower than the implementation we are used to.
-In fact, to speed up the process, we make use of \keyword{DNS resolvers}, that technical people simply call DNSs.
-DNSs are identified by an IP address, but they usually come with a primary and a secondary address.
-For example, Google provides a DNS resolver with \texttt{8.8.8.8} and \texttt{8.8.4.4} as primary and secondary addresses respectively.
+If every resolution required traversing the entire hierarchy iteratively, DNS lookups would introduce unacceptable latency. To mitigate this, DNS resolvers heavily utilize \emph{caching}. When a resolver retrieves an IP address, it stores the result locally for the time specified in the TTL (Time To Live) field. Public resolvers, such as Google Public DNS (\texttt{8.8.8.8} and \texttt{8.8.4.4}) or Cloudflare (\texttt{1.1.1.1}), leverage massive, shared caches to significantly accelerate domain resolution worldwide \cite{rfc1035}.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[font=\sffamily, >=stealth, round/.style={rounded corners=3pt}]
+        % Coordinate definitions for lifelines
+        \def\xos{0}
+        \def\xstub{2.3}
+        \def\xrec{5.2}
+        \def\xroot{7.8}
+        \def\xtld{10.3}
+        \def\xauth{13}
+        \def\bottomy{-10.8}
+
+        % Entity Boxes
+        \node[draw, fill=gray!10, round, align=center, text width=1.5cm, font=\scriptsize] (os) at (\xos,0) {Process};
+        \node[draw, fill=gray!10, round, align=center, text width=1.5cm, font=\scriptsize] (stub) at (\xstub,0) {Stub Resolver};
+        \node[draw, fill=gray!15, round, align=center, text width=1.8cm, font=\scriptsize] (rec) at (\xrec,0) {DNS Resolver};
+        \node[draw, fill=gray!10, round, align=center, text width=1.4cm, font=\scriptsize] (root) at (\xroot,0) {Root DNS\\ Server};
+        \node[draw, fill=gray!10, round, align=center, text width=1.4cm, font=\scriptsize] (tld) at (\xtld,0) {TLD DNS\\ Server (.com)};
+        \node[draw, fill=gray!10, round, align=center, text width=1.6cm, font=\scriptsize] (auth) at (\xauth,0) {Authoritative\\ DNS Server\\ (gmail.com)};
+
+        % Lifelines
+        \draw[dashed, gray!80] (os) -- (\xos,\bottomy);
+        \draw[dashed, gray!80] (stub) -- (\xstub,\bottomy);
+        \draw[dashed, gray!80] (rec) -- (\xrec,\bottomy);
+        \draw[dashed, gray!80] (root) -- (\xroot,\bottomy);
+        \draw[dashed, gray!80] (tld) -- (\xtld,\bottomy);
+        \draw[dashed, gray!80] (auth) -- (\xauth,\bottomy);
+
+        % Message sequence (Numbered 1-10)
+        \draw[->, thick] (\xos, -0.9) -- node[above, font=\tiny, align=center] {1. Query \texttt{gmail.com}} (\xstub, -0.9);
+        \draw[->, thick] (\xstub, -1.8) -- node[above, font=\tiny, align=center] {2. Query: \texttt{gmail.com}} (\xrec, -1.8);
+        
+        \draw[->, thick] (\xrec, -2.8) -- node[above, font=\tiny, align=center] {3. Query: \texttt{gmail.com}} (\xroot, -2.8);
+        \draw[<-, thick] (\xrec, -3.7) -- node[above, font=\tiny, align=center] {4. Referral to .com TLD} (\xroot, -3.7);
+
+        \draw[->, thick] (\xrec, -4.7) -- node[above, font=\tiny, align=center] {5. Query: \texttt{gmail.com}} (\xtld, -4.7);
+        \draw[<-, thick] (\xrec, -5.6) -- node[above, font=\tiny, align=center] {6. Referral to \texttt{gmail.com} Authoritative} (\xtld, -5.6);
+
+        \draw[->, thick] (\xrec, -6.7) -- node[above, font=\tiny, align=center] {7. Query: \texttt{gmail.com}} (\xauth, -6.7);
+        \draw[<-, thick] (\xrec, -7.7) -- node[above, font=\tiny, align=center] {8. IP Address: X.X.X.X} (\xauth, -7.7);
+
+        \draw[<-, thick] (\xstub, -8.7) -- node[above, font=\tiny, align=center] {9. Response: X.X.X.X} (\xrec, -8.7);
+        \draw[<-, thick] (\xos, -9.6) -- node[above, font=\tiny, align=center] {10. Response: X.X.X.X} (\xstub, -9.6);
+    \end{tikzpicture}
+    \caption{Sequence diagram of a domain name resolution flow from an OS process perspective.}
+    \label{fig:dns_resolving_sequence}
+\end{figure}
+
+The hierarchical namespace is subdivided into administrative spaces known as \keyword{DNS Zones}. A zone represents a distinct, contiguous portion of the domain space managed by a specific administrator or organization. The authoritative data for a zone is maintained in a \emph{zone file}, which is a standard text file comprising various Resource Records (RRs). Every zone file must begin with a Start of Authority (SOA) record, which dictates core zone parameters such as the primary name server, the administrator's email, and synchronization timers for secondary backup servers.
+
+Within a zone file, network administrators configure several types of Resource Records to dictate how traffic should be routed. Some of the most critical record types include:
+\begin{itemize}
+    \item \emph{A (Address):} Maps a hostname to a \(32\)-bit IPv4 address.
+    \item \emph{AAAA (Quad-A):} Maps a hostname to a \(128\)-bit IPv6 address \cite{rfc3596}.
+    \item \emph{CNAME (Canonical Name):} Aliases one domain name to another. It is useful when multiple services (like \emph{www} and \emph{ftp}) run on the same server, allowing them to point to a single A or AAAA record.
+    \item \emph{MX (Mail Exchange):} Directs email to the mail servers responsible for accepting messages on behalf of a domain.
+    \item \emph{TXT (Text):} Holds arbitrary human-readable or machine-readable text. It is heavily utilized for domain verification and email authentication mechanisms, such as Sender Policy Framework (SPF) and DomainKeys Identified Mail (DKIM).
+    \item \emph{NS (Name Server):} Delegates a DNS zone to use specific authoritative name servers.
+    \item \emph{PTR (Pointer):} Used to map an IP address back to a hostname.
+\end{itemize}
+
+While standard DNS translates human-readable hostnames into IP addresses (forward resolution), \keyword{Reverse DNS} (rDNS) performs the exact opposite: resolving an IP address back to its associated hostname using PTR records.
+
+To support rDNS within the hierarchical structure of DNS, special domains were implemented. For IPv4, the \texttt{in-addr.arpa} domain is used, and the IP address octets are written in reverse order to match the DNS tree's most-specific-to-least-specific structure. For instance, finding the hostname for the IP address \texttt{192.0.2.10} requires querying the PTR record for \texttt{10.2.0.192.in-addr.arpa}. Similarly, IPv6 addresses utilize the \emph{ip6.arpa} domain, reversing the hexadecimal nibbles of the \(128\)-bit address \cite{rfc3596}.
+
+\subsection{Hands on DNS}
+To manually interact with the Domain Name System, network administrators and developers rely on several standard command-line utilities. 
+The most prominent of these tools are bundled within the \emph{BIND} (Berkeley Internet Name Domain) software suite, maintained by the Internet Systems Consortium (ISC).\footnote{\url{https://www.isc.org/bind/}}
+
+The most widely used utility is \texttt{dig} (Domain Information Groper), which offers a comprehensive, raw view of the DNS response. 
+It allows users to specify the exact Resource Record (RR) type to query, the specific authoritative or recursive name server to interrogate, and various query options, such as enabling or disabling recursion.
+
+Another traditional tool is \texttt{nslookup} (Name Server Lookup). Historically, it operated in either an interactive or non-interactive mode. While still heavily utilized for quick queries and widely available across different operating systems (including Windows), it is generally considered less flexible and informative than \texttt{dig} for complex debugging tasks.
+
+\begin{example}{}
+    Running \texttt{dig} without arguments will return the root DNS servers:
+    \begin{verbatim}
+$ dig
+
+; <<>> DiG 9.20.27 <<>>
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 45226
+;; flags: qr rd ra; QUERY: 1, ANSWER: 13, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 65494
+;; QUESTION SECTION:
+;.				IN	NS
+
+;; ANSWER SECTION:
+.			6203	IN	NS	c.root-servers.net.
+.			6203	IN	NS	j.root-servers.net.
+.			6203	IN	NS	f.root-servers.net.
+.			6203	IN	NS	a.root-servers.net.
+.			6203	IN	NS	g.root-servers.net.
+.			6203	IN	NS	h.root-servers.net.
+.			6203	IN	NS	l.root-servers.net.
+.			6203	IN	NS	d.root-servers.net.
+.			6203	IN	NS	i.root-servers.net.
+.			6203	IN	NS	e.root-servers.net.
+.			6203	IN	NS	k.root-servers.net.
+.			6203	IN	NS	b.root-servers.net.
+.			6203	IN	NS	m.root-servers.net.
+
+;; Query time: 0 msec
+;; SERVER: 127.0.0.53#53(127.0.0.53) (UDP)
+;; WHEN: Wed Oct 07 17:49:01 CEST 2026
+;; MSG SIZE  rcvd: 239
+    \end{verbatim}
+    This command basically asked for the root servers i.e. for the record, of type \emph{nameserver}, containing the root (\texttt{.}) domain.
+    In fact, in the answer section, we can see all the NS records containing the root DNS servers.
+    The \texttt{6203} number is the TTL (the number of seconds after which this information will be considered stale).
+    Also note that \texttt{dig} is telling us that the query was satisfied in \texttt{0} milliseconds. This means that the result was cached on our system.
+    Moreover, \texttt{dig} tells us that the queried server is at IP address \texttt{127.0.0.53}, a \emph{loopback} IP address which identifies the DNS stub, and that the stub used UDP as transport protocol to make the DNS requests: this is why DNS is an application-level protocol.
+\end{example}
+
+\begin{example}{Finding unina}
+    We will now see an example usage of \texttt{dig} to explore the DNS System. Our goal is to find the website of the University of Naples (unina).\footnote{Outputs will be shortened for brevity.}
+    \begin{verbatim}
+$ dig -4 -q unina.it
+;; QUESTION SECTION:
+;unina.it.			IN	A
+
+;; AUTHORITY SECTION:
+unina.it.		3230	IN	SOA	dscna1.unina.it. empty.empty. 29113...
+    \end{verbatim}
+    This command has two options: \texttt{-4}, which impose the use of IPv4; \texttt{-q} (target domain) with \texttt{unina.it} as argument.
+    Implicitly, if no record type is specified, \texttt{dig} asks for type A records.
+    No such records were found, but a SOA record was returned to state that \texttt{dscna1.unina.it} is the authority server for that domain and that \texttt{empty.empty} (actually, \texttt{empty@empty}) is the email address of the administrator.
+    Good, probably we should ask for the \texttt{www.unina.it} subdomain. Let's ask directly to the authorative server by specifying the \texttt{@server} argument (for further information, consult \texttt{dig}'s manual).
+    \begin{verbatim}
+$ dig @dscna1.unina.it -4 -q www.unina.it
+;; QUESTION SECTION:
+;www.unina.it.			IN	A
+
+;; ANSWER SECTION:
+www.unina.it.		1800	IN	A	143.225.161.30
+
+;; SERVER: 192.133.28.101#53(dscna1.unina.it) (UDP)
+    \end{verbatim}
+    Now, we can send a HTTP request to the found IP address!
+\end{example}
 
 \section{Peer-to-peer File Sharing: BitTorrent}
 BitTorrent is the most common peer-to-peer (\keyword{p2p}) protocol for file sharing. It is based on the concept of \keyword{torrent}, that is a group of peers participating to the distribution of a file. 

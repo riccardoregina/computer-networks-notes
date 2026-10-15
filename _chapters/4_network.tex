@@ -221,6 +221,96 @@ The practical utility of ICMP is best illustrated by two network diagnostic util
     \item The \texttt{traceroute} command exploits the IP TTL field and ICMP error messages. It sends packets (often UDP or ICMP Echo Requests) with sequentially increasing TTL values (\(1, 2, 3, \dots\)). As each packet expires at a successive router along the path, that router returns an ICMP \emph{Time Exceeded} message. By collecting these error messages, the source host can map the entire route to the destination \cite{kurose2017}.
 \end{itemize}
 
+\section{Network Management}
+Operating a computer network is a highly complex task.
+Modern networks consist of a vast array of heterogeneous hardware, software, and protocols that must interoperate seamlessly to provide reliable services.
+But what exactly is network management? Broadly defined, network management encompasses the deployment, integration, coordination, and monitoring of network resources and hardware to meet the performance, operational, and quality of service requirements \cite{kurose2017}.
+
+To fully grasp network management architecture, several fundamental concepts must be established:
+\begin{itemize}
+    \item \emph{Managing server}: A centralized system (often referred to as a Network Management Station) where human operators or automated software monitor and control the network.
+    \item \emph{Managed device}: Any network node (such as routers, switches, or servers) that resides on the managed network and requires monitoring.
+    \item \emph{Configuration data}: Information that dictates the operational parameters and state of a managed device.
+    \item \emph{Operational data}: Dynamic data reflecting the current state and activities of the device.
+    \item \emph{Device statistics}: Metrics and historical data regarding the performance and health of the device (e.g., packet drop rates, interface utilization).
+    \item \emph{Network management agent}: A software process running on a managed device that communicates with the managing server, taking local action based on remote commands.
+    \item \emph{Network management protocol}: The communication standard that runs between the managing server and the managed devices' agents, enabling them to exchange management information.
+\end{itemize}
+
+\subsection{Simple Network Management Protocol}
+The \emph{Simple Network Management Protocol} (\keyword{SNMP}), particularly its third version (SNMPv3) \cite{rfc3411}, is a widely deployed network management protocol.
+Using SNMP, a network operator can query or set data maintained in a managed device's \emph{Management Information Base} (\keyword{MIB}).
+The MIB acts as a virtual information store for network management modules; its objects are formally specified using a data description language known as the \emph{Structure of Management Information} (SMI) \cite{rfc2578}.
+
+\subsubsection{Management Information Base}
+The MIB is organized as a rigidly defined, hierarchical tree structure based on the OSI naming tree. Within this architecture, each managed object is uniquely identified by an \emph{Object Identifier} (OID) \cite{rfc2578}.
+An OID is represented as a sequence of non-negative integers that trace a specific path from the root of the tree down to the object, with each node separated by dots. The global tree root is maintained jointly by the International Organization for Standardization (ISO) and the International Telecommunication Union (ITU-T).
+
+\begin{figure}[htbp]
+    \centering
+    \caption{Hierarchical MIB Tree Representation.}
+\begin{tikzpicture}[
+    font=\sffamily\scriptsize,
+    grow=right,
+    level 1/.style={sibling distance=1.2cm, level distance=2.2cm},
+    level 2/.style={sibling distance=1.2cm, level distance=1.5cm},
+    level 3/.style={sibling distance=1.2cm, level distance=1.5cm},
+    level 4/.style={sibling distance=2.4cm, level distance=1.8cm},
+    level 5/.style={sibling distance=1.2cm, level distance=2.2cm},
+    level 6/.style={sibling distance=1.2cm, level distance=2.2cm},
+    edge from parent/.style={draw, -latex},
+    every node/.style={draw, rectangle, rounded corners, fill=blue!5, inner sep=4pt, align=center}
+]
+    \node {root}
+        child {node {joint-iso-ccitt (2)}}
+        child {node {iso (1)}
+            child {node {org (3)}
+                child {node {dod (6)}
+                    child {node {internet (1)}
+                        child {node {private (4)}
+                            child {node {enterprises (1)}}
+                        }
+                        child {node {experimental (3)}}
+                        child {node {mgmt (2)}
+                            child {node {mib-2 (1)}}
+                        }
+                        child {node {directory (1)}}
+                    }
+                }
+            }
+        }
+        child {node {ccitt (0)}};
+\end{tikzpicture}
+\end{figure}
+
+For TCP/IP-based networks, all managed objects reside under the \texttt{internet} node, which corresponds to the OID prefix \texttt{1.3.6.1} (tracing the exact path: \texttt{iso(1)} \(\rightarrow\) \texttt{org(3)} \(\rightarrow\) \texttt{dod(6)} \(\rightarrow\) \texttt{internet(1)}). Below the \texttt{internet} node, the tree branches into several key subtrees \cite{rfc1213}. Here, we mention two of them:
+\begin{itemize}
+    \item \texttt{mgmt(2)}: Contains standard objects defined by the Internet Engineering Task Force (IETF). The universally supported MIB-II resides here under \texttt{mib-2(1)}, assigning it the OID prefix \texttt{1.3.6.1.2.1}.
+    \item \texttt{private(4)}: Used to identify objects defined unilaterally by third parties. Its primary sub-node is \texttt{enterprises(1)} (\texttt{1.3.6.1.4.1}), where hardware vendors (e.g., Cisco, Juniper) attach their proprietary MIB modules to support vendor-specific features.
+\end{itemize}
+
+The tree with \texttt{mgmt(2)} as root contains all the information required for network management, such as:
+\begin{itemize}
+    \item \emph{System Information}: Foundational objects such as \texttt{sysDescr} (a textual description of the entity), \texttt{sysUpTime} (the time elapsed since the network management portion of the system was last re-initialized), \texttt{sysContact}, and \texttt{sysName} provide identity and operational state information.
+    \item \emph{Interfaces Group}: This is arguably the most critical group for network performance monitoring. It tracks the status and traffic of physical and logical interfaces. Key objects include \texttt{ifOperStatus} and \texttt{ifAdminStatus} (to verify if a link is up or down), alongside continuous counters like \texttt{ifInOctets} and \texttt{ifOutOctets}, which record the total number of bytes received and transmitted on a given interface.
+    \item \emph{IP Statistics}: Objects like \texttt{ipInReceives}, \texttt{ipForwDatagrams}, and the \texttt{ipRouteTable} allow administrators to monitor the volume of network-layer traffic and track routing operations.
+    \item \emph{Transport Layer Statistics}: Counters such as \texttt{tcpActiveOpens}, \texttt{tcpCurrEstab} (current established connections), and \texttt{udpInDatagrams} provide visibility into end-to-end transport layer health and volume.
+\end{itemize}
+
+Network monitoring systems (NMS) typically do not retrieve a direct \q{bandwidth usage percentage} from a router. Instead, they continuously poll the \texttt{ifInOctets} and \texttt{ifOutOctets} counters at fixed intervals. 
+By calculating the delta of these counter values between two polling cycles and dividing by the elapsed time, the system can dynamically derive the real-time throughput (e.g., bits per second) of a specific interface.
+
+\subsubsection{SNMP Communication}
+SNMPv3 defines seven distinct types of messages, which are referred to as \emph{Protocol Data Units} (\keyword{PDU}) \cite{rfc3416}.
+These comprise: \texttt{GetRequest}, \texttt{GetNextRequest}, \texttt{SetRequest}, \texttt{Response}, \texttt{GetBulkRequest}, \texttt{InformRequest}, and \texttt{SNMPv2-Trap}.
+
+The structure of an SNMPv3 message consists of a header detailing version and security parameters, followed by the scoped PDU. 
+
+SNMP communication primarily follows a request-response model, operating predominantly over UDP.\footnote{Although SNMP is explicitly designed for monitoring and controlling network hardware elements like routers and switches, it is an application-layer protocol.}
+The managing server dispatches requests (such as a \texttt{GetRequest} to read a variable or \texttt{SetRequest} to alter one) to the agent on the managed device.
+The agent parses the request, interacts with the local MIB, and returns the result via a \texttt{Response} message.
+In contrast to this polling model, if an unexpected or critical event occurs on the managed device, the agent can autonomously send an asynchronous \texttt{SNMPv2-Trap} to the managing server to raise an immediate alert.
+
 \section{IPv6}
 To address the imminent exhaustion of IPv4 addresses and to modernize the Internet Protocol, the Internet Engineering Task Force (IETF) standardized \keyword{IPv6} \cite{rfc8200}. The most prominent feature of this new version is its adoption of a \(128\)-bit address space. This ensures that the Internet will effectively never run out of unique IP addresses, allowing for a vast proliferation of connected devices.
 

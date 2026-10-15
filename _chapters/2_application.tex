@@ -263,7 +263,7 @@ The cache hit rate increases when more clients use the cache. The hit rate typic
 E-mail network applications are implemented with a client-server application: the client application is called the \keyword{user-agent}, while the server is called \keyword{mail server} and stores the user's mailbox.
 
 Two application protocols are involved: the \emph{first} protocol is used for communications between user agents and mail servers. ; the \emph{second} protocol is used for communications between mail servers.
-The \emph{first} can POP3, IMAP, HTTP, while the \emph{second} is \emph{SMTP}, that is based on TCP.
+The \emph{first} can be POP3, IMAP, HTTP, while the \emph{second} is \emph{SMTP}, that is based on TCP~\cite{kurose2017}.
 
 Suppose Alice wants to send an e-mail to Bob: 
 \begin{enumerate}
@@ -272,8 +272,24 @@ Suppose Alice wants to send an e-mail to Bob:
     \item Bob's user agent requests an update to the mail server B and receives the e-mail from Alice, assuming a working connection.
 \end{enumerate}
 
-One could ask whether the mail servers are actually needed. First, mail servers are usually active, while user agents not. With mail servers, one can send an e-mail and then power off its device, knowing that the mail server will handle the actual sending. If there were not mail servers -- and so if user-agents communicated directly --, two user-agents should be simultaneously active during the communication, a condition that can be frustrating.
+One could ask whether the mail servers are actually needed. First, mail servers are usually active, while user agents are not. With mail servers, one can send an e-mail and then power off its device, knowing that the mail server will handle the actual sending. If there were not mail servers -- and so if user-agents communicated directly --, two user-agents should be simultaneously active during the communication, a condition that can be frustrating.
 Moreover, e-mails have developed in corporate environments, where communications must be verified. Mail servers can be certified by competent authorities, adding a layer of security.
+
+\subsection{Simple Mail Transfer Protocol}
+The \emph{Simple Mail Transfer Protocol} (\keyword{SMTP}) \cite{rfc5321} defines how a mail server should send an email to another.
+SMTP is a legacy protocol: its first RFC is dated back in the 1982.
+This is why some features of SMTP look fairly strange, such as the fact that SMTP can only send 7-bit ASCII encoded messages: not pleasant to one wanting to send a binary file (e.g. images) or a message with Unicode characters.
+To bypass this limitation (at the cost of additional computation), modern mail systems rely on the \emph{Multipurpose Internet Mail Extensions} (\texttt{MIME}) standard \cite{rfc2045}. MIME automatically encodes non-ASCII data (such as binary attachments or UTF-8 text) into ASCII-compatible formats like Base64 before it is transmitted via SMTP.
+
+We will now describe a mail transfer from server A to server B.
+Upon completing the TCP handshake over port 25 (we will see this when talking about the Transport Layer), server B initiates the application-level session by sending a \texttt{220} response code, indicating it is ready to receive mail.
+Server A responds with the \texttt{HELO} command to identify itself. Server B replies with a \texttt{250} success code, accompanied by a list of its supported service extensions. 
+
+Following this greeting phase, the actual mail transaction begins. Server A specifies the sender's address using the \texttt{MAIL FROM} command and identifies the intended recipient(s) via the \texttt{RCPT TO} command. 
+Once the recipient is accepted, server A issues the \texttt{DATA} command. 
+Server B replies with a \texttt{354} intermediate reply code, instructing the client to begin transmitting the message contents. 
+The transmission of the message body is terminated by sending a single period (\texttt{.}) on a line by itself. 
+Finally, server A gracefully closes the connection using the \texttt{QUIT} command, prompting server B to close the TCP connection \cite{kurose2017}.
 
 \section{File Transfer Protocol}
 The \keyword{File Transfer Protocol} (FTP) is a standard network protocol used for the transfer of computer files between a client and server on a computer network. Defined originally in RFC 959~\cite{rfc959}, FTP is built on a client-server architecture and uniquely utilizes two separate TCP connections to operate: a \emph{control connection} and a \emph{data connection}.
